@@ -1,4 +1,8 @@
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.db import models
+from django.utils import timezone
+from datetime import datetime
+import pytz
 
 ROLE_CHOICES = (
     (0, 'visitor'),
@@ -31,20 +35,25 @@ class CustomUser(AbstractBaseUser):
         type updated_at: bool
 
     """
+    first_name = models.CharField(max_length=20, null=True, blank=True)
+    last_name = models.CharField(max_length=20, null=True, blank=True)
+    middle_name = models.CharField(max_length=20, null=True, blank=True)
+    email = models.EmailField(max_length=100, unique=True, null=True)
+    password = models.CharField(max_length=128)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    role = models.IntegerField(choices=ROLE_CHOICES, default=0)
+    is_active = models.BooleanField(default=False)
 
     def __str__(self):
-        """
-        Magic method is redefined to show all information about CustomUser.
-        :return: user id, user first_name, user middle_name, user last_name,
-                 user email, user password, user updated_at, user created_at,
-                 user role, user is_active
-        """
+        return f"{self.id} - {self.first_name} {self.last_name}"
 
     def __repr__(self):
         """
         This magic method is redefined to show class and id of CustomUser object.
         :return: class, id
         """
+        return f"CustomUser(id={self.id})"
 
     @staticmethod
     def get_by_id(user_id):
@@ -52,6 +61,7 @@ class CustomUser(AbstractBaseUser):
         :param user_id: SERIAL: the id of a user to be found in the DB
         :return: user object or None if a user with such ID does not exist
         """
+        return CustomUser.objects.filter(id=user_id).first()
 
     @staticmethod
     def get_by_email(email):
@@ -61,6 +71,7 @@ class CustomUser(AbstractBaseUser):
         :type email: str
         :return: user object or None if a user with such ID does not exist
         """
+        return CustomUser.objects.filter(email=email).first()
 
     @staticmethod
     def delete_by_id(user_id):
@@ -69,9 +80,14 @@ class CustomUser(AbstractBaseUser):
         :type user_id: int
         :return: True if object existed in the db and was removed or False if it didn't exist
         """
+        user = CustomUser.get_by_id(user_id)
+        if user:
+            user.delete()
+            return True
+        return False
 
     @staticmethod
-    def create(email, password, first_name=None, middle_name=None, last_name=None):
+    def create(email, password, first_name=None, middle_name=None, last_name=None, created_at=None):
         """
         :param first_name: first name of a user
         :type first_name: str
@@ -85,6 +101,17 @@ class CustomUser(AbstractBaseUser):
         :type password: str
         :return: a new user object which is also written into the DB
         """
+        if created_at is None:
+            created_at = datetime.now(pytz.UTC)  # Поточний час у UTC
+
+        return CustomUser.objects.create(
+            email=email,
+            password=password,
+            first_name=first_name,
+            middle_name=middle_name,
+            last_name=last_name,
+            created_at=created_at,
+        )
 
     def to_dict(self):
         """
@@ -103,6 +130,17 @@ class CustomUser(AbstractBaseUser):
         |   'is_active:' True
         | }
         """
+        return {
+            'id': self.id,
+            'first_name': self.first_name,
+            'middle_name': self.middle_name,
+            'last_name': self.last_name,
+            'email': self.email,
+            'created_at': int(self.created_at.replace(tzinfo=pytz.UTC).timestamp()),
+            'updated_at': int(self.updated_at.replace(tzinfo=pytz.UTC).timestamp()),
+            'role': self.role,
+            'is_active': self.is_active
+        }
 
     def update(self,
                first_name=None,
@@ -127,14 +165,29 @@ class CustomUser(AbstractBaseUser):
         :type is_active: bool
         :return: None
         """
+        if first_name is not None:
+            self.first_name = first_name
+        if middle_name is not None:
+            self.middle_name = middle_name
+        if last_name is not None:
+            self.last_name = last_name
+        if password is not None:
+            self.password = password
+        if role is not None:
+            self.role = role
+        if is_active is not None:
+            self.is_active = is_active
+        self.save()
 
     @staticmethod
     def get_all():
         """
         returns data for json request with QuerySet of all users
         """
+        return CustomUser.objects.all()
 
     def get_role_name(self):
         """
         returns str role name
         """
+        return dict(ROLE_CHOICES).get(self.role, 'Unknown')
